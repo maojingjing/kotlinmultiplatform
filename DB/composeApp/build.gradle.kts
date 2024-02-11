@@ -67,4 +67,8 @@ android {
         debugImplementation(libs.compose.ui.tooling)
     }
 }
+dependencies {
+    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.recyclerview)
+}
 

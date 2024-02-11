@@ -3,27 +3,31 @@ import Shared
 
 struct ContentView: View {
     @State private var showContent = false
+    @ObservedObject private(set) var viewModel: ViewModel
+    
     var body: some View {
-        VStack {
-            Button("Click me!") {
-                withAnimation {
-                    showContent = !showContent
-                }
-            }
-
-            if showContent {
-                VStack(spacing: 16) {
-                    Image(systemName: "swift")
-                        .font(.system(size: 200))
-                        .foregroundColor(.accentColor)
-                    Text("SwiftUI: \(Greeting().greet())")
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
+        NavigationView {
+            listView()
+                .navigationBarTitle("SpaceX Launches")
+                .navigationBarItems(trailing:
+                                        Button("Reload") {
+                    self.viewModel.loadLaunches(forceReload: true)
+                })
+        }
+    }
+    
+    private func listView() -> AnyView {
+            switch viewModel.launches {
+            case .loading:
+                return AnyView(Text("Loading...").multilineTextAlignment(.center))
+            case .result(let launches):
+                return AnyView(List(launches) { launch in
+                    RocketLaunchRow(rocketLaunch: launch)
+                })
+            case .error(let description):
+                return AnyView(Text(description).multilineTextAlignment(.center))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding()
-    }
 }
 
 struct ContentView_Previews: PreviewProvider {
@@ -31,3 +35,39 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
+
+extension ContentView {
+    enum LoadableLaunches {
+        case loading
+        case result([RocketLaunch])
+        case error(String)
+    }
+
+   @MainActor
+   class ViewModel: ObservableObject {
+       let sdk: SpaceXSDK
+       @Published var launches = LoadableLaunches.loading
+       
+       init(sdk: SpaceXSDK) {
+                  self.sdk = sdk
+                  self.loadLaunches(forceReload: false)
+              }
+       
+       func loadLaunches(forceReload: Bool) {
+           Task {
+                   do {
+                       self.launches = .loading
+                       let launches = try await sdk.getLaunches(forceReload: forceReload)
+                       self.launches = .result(launches)
+                   } catch {
+                       self.launches = .error(error.localizedDescription)
+                   }
+               }
+        }
+
+
+   }
+}
+
+extension RocketLaunch: Identifiable { }
+
